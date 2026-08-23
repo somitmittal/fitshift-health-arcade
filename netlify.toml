@@ -1,2 +1,7 @@
 [build]
   publish = "outputs"
+
+[[redirects]]
+  from = "/"
+  to = "/fitshift.html"
+  status = 200
