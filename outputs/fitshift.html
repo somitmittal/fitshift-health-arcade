@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitShift — Health Arcade</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'], mono: ['DM Mono', 'monospace'] },
+          colors: { ink: '#071523', panel: '#0c1d2d', mint: '#a8ff73', aqua: '#65e8ff', coral: '#ff8d6c' }
+        }
+      }
+    };
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: #071523; color: #f4fbff; font-family: 'Plus Jakarta Sans', sans-serif; }
+    button { font: inherit; }
+    .app-shell { background: radial-gradient(circle at 12% 0%, rgba(101,232,255,.12), transparent 30%), radial-gradient(circle at 90% 8%, rgba(168,255,115,.08), transparent 26%), #071523; }
+    .glass { background: linear-gradient(135deg, rgba(17,45,65,.94), rgba(9,28,43,.88)); border: 1px solid rgba(191,235,255,.15); box-shadow: 0 24px 80px rgba(0,0,0,.26); backdrop-filter: blur(18px); }
+    .hairline { border-color: rgba(191,235,255,.13); }
+    .label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: #87a5b7; font-family: 'DM Mono', monospace; }
+    .mono { font-family: 'DM Mono', monospace; }
+    .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; color: #8dd7e6; }
+    .stage-wrap { background: #0b2030; border: 1px solid rgba(191,235,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 20px 70px rgba(0,0,0,.22); }
+    canvas { display: block; width: 100%; height: auto; touch-action: none; border-radius: 18px; }
+    .score-glow { text-shadow: 0 0 22px rgba(168,255,115,.48); }
+    .progress-track { height: 8px; border-radius: 99px; background: rgba(4,18,29,.75); overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #65e8ff, #a8ff73); box-shadow: 0 0 18px rgba(168,255,115,.45); transition: width .25s ease; }
+    .challenge-row { transition: opacity .2s ease, transform .2s ease, background .2s ease; }
+    .challenge-row.done { background: rgba(168,255,115,.08); }
+    .challenge-row.done .challenge-icon { background: #a8ff73; color: #0b2612; border-color: #a8ff73; }
+    .challenge-row.done .challenge-name { color: #dfffcf; }
+    .challenge-icon { width: 22px; height: 22px; border: 1px solid rgba(191,235,255,.2); display: grid; place-items: center; border-radius: 7px; color: #7292a4; font-size: 13px; flex: 0 0 auto; }
+    .leader-row { border-bottom: 1px solid rgba(191,235,255,.09); }
+    .leader-row:last-child { border-bottom: 0; }
+    .leader-row.you { background: rgba(101,232,255,.09); color: #c9f8ff; }
+    .phase-pill { transition: background .4s ease, color .4s ease; }
+    .phase-pill.day { background: rgba(255,217,112,.14); color: #ffe49a; }
+    .cycle-orb { transition: transform .2s linear, background .5s ease; }
+    .cycle-orb.day { background: radial-gradient(circle at 40% 30%, #fff5b5, #ffc14f 40%, #b75e37 100%); box-shadow: 0 0 0 7px rgba(255,193,79,.08), 0 0 28px rgba(255,193,79,.48); }
+    .modal-backdrop { background: rgba(2,12,22,.72); backdrop-filter: blur(12px); }
+    .modal-panel { animation: modalIn .4s cubic-bezier(.2,.8,.2,1) both; }
+    .pulse-dot { animation: pulseDot 1.8s ease-in-out infinite; }
+    .floaty { animation: floaty 4s ease-in-out infinite; }
+    .button-pop:active { transform: translateY(1px) scale(.98); }
+    .button-pop { transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+    .button-pop:hover { box-shadow: 0 12px 30px rgba(101,232,255,.16); }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes pulseDot { 0%,100% { box-shadow: 0 0 0 0 rgba(168,255,115,.35); } 50% { box-shadow: 0 0 0 7px rgba(168,255,115,0); } }
+    @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @media (max-width: 860px) { .game-grid { grid-template-columns: 1fr; } .side-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; } }
+    @media (max-width: 560px) { .side-grid { grid-template-columns: 1fr; } .topbar-copy { display: none; } .modal-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="app-shell min-h-screen px-4 py-4 sm:px-6 sm:py-6 lg:px-10">
+    <div class="mx-auto max-w-[1380px]">
+      <header class="mb-5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="grid h-11 w-11 place-items-center rounded-2xl border border-mint/40 bg-mint/10 text-2xl shadow-[0_0_28px_rgba(168,255,115,.14)]">✦</div>
+          <div>
+            <div class="flex items-center gap-2"><span class="text-lg font-extrabold tracking-tight">FIT<span class="text-mint">SHIFT</span></span><span class="pulse-dot h-2 w-2 rounded-full bg-mint"></span></div>
+            <p class="topbar-copy text-xs text-slate-400">A tiny arcade for a stronger heart</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="hidden items-center gap-2 rounded-full border hairline bg-white/[.035] px-3 py-2 sm:flex"><span class="text-sm">🏆</span><span class="label">Best</span><span id="topBest" class="mono text-sm text-mint">000000</span></div>
+          <button id="helpButton" class="button-pop rounded-xl border hairline bg-white/[.04] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[.08]">How to play</button>
+        </div>
+      </header>
+
+      <section class="game-grid grid grid-cols-[minmax(0,1fr)_320px] gap-5">
+        <div>
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span id="phasePill" class="phase-pill day rounded-full px-3 py-1.5 text-[11px] font-bold tracking-wide">☀ DAY RUN</span>
+              <span id="statusText" class="label">Ready when you are</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="label">Run time</span><span id="timeText" class="mono text-sm text-slate-200">00:00</span>
+            </div>
+          </div>
+          <div class="stage-wrap relative overflow-hidden rounded-[20px] p-1.5 sm:p-2">
+            <canvas id="gameCanvas" width="960" height="520" aria-label="FitShift game canvas"></canvas>
+            <div class="pointer-events-none absolute inset-x-5 top-5 flex items-start justify-between sm:inset-x-7 sm:top-7">
+              <div class="rounded-2xl border border-white/15 bg-[#071523]/55 px-3 py-2 backdrop-blur-md sm:px-4"><div class="label">Score</div><div id="scoreText" class="score-glow mono text-2xl font-medium text-mint sm:text-3xl">000000</div></div>
+              <div class="flex items-center gap-2 rounded-full border border-white/15 bg-[#071523]/55 px-3 py-2 backdrop-blur-md"><div class="cycle-orb day grid h-8 w-8 place-items-center rounded-full text-lg" id="cycleOrb">☀</div><div><div id="phaseLabel" class="text-[11px] font-bold text-slate-200">DAYLIGHT</div><div id="phaseSub" class="mono text-[10px] text-slate-400">SUNNY MODE</div></div></div>
+            </div>
+            <div class="pointer-events-none absolute inset-x-5 bottom-5 flex items-end justify-between gap-4 sm:inset-x-7 sm:bottom-7">
+              <div class="w-44 rounded-2xl border border-white/15 bg-[#071523]/62 px-3 py-2.5 backdrop-blur-md sm:w-56 sm:px-4"><div class="mb-1.5 flex items-center justify-between"><span class="label">Fitness</span><span id="fitnessText" class="mono text-xs text-aqua">100%</span></div><div class="progress-track"><div id="fitnessBar" class="progress-fill" style="width:100%"></div></div></div>
+              <div class="hidden rounded-2xl border border-white/15 bg-[#071523]/62 px-4 py-2.5 text-right backdrop-blur-md sm:block"><div class="label">Controls</div><div class="mt-1 text-xs text-slate-300"><span class="mono text-aqua">A / D</span> or <span class="mono text-aqua">← →</span> move <span class="ml-2 mono text-mint">W / ↑ / Space</span> jump</div></div>
+            </div>
+            <div id="pauseBadge" class="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-[#071523]/80 px-5 py-3 text-sm font-bold tracking-wide text-white backdrop-blur-md">PAUSED · press P to resume</div>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3 px-1"><p class="text-xs text-slate-500"><span class="text-mint">●</span> Healthy foods build momentum <span class="mx-1 text-slate-700">/</span> <span class="text-coral">●</span> Junk drains fitness</p><div class="flex items-center gap-2"><button id="jumpButton" class="button-pop rounded-lg border border-mint/25 bg-mint/10 px-3 py-1.5 text-xs font-bold text-mint hover:bg-mint/20">Jump ↥</button><button id="pauseButton" class="button-pop rounded-lg border hairline bg-white/[.035] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:bg-white/[.08]">Pause</button><button id="soundButton" class="button-pop rounded-lg border hairline bg-white/[.035] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:bg-white/[.08]">Sound on</button></div></div>
+        </div>
+
+        <aside class="side-grid space-y-4">
+          <section class="glass rounded-[20px] p-5">
+            <div class="mb-4 flex items-start justify-between"><div><div class="eyebrow">Today’s boost</div><h2 class="mt-1 text-lg font-extrabold tracking-tight">Daily challenges</h2></div><div class="floaty text-2xl">🌱</div></div>
+            <div id="challengeList" class="space-y-2.5"></div>
+            <div class="mt-4 flex items-center justify-between border-t hairline pt-3"><span class="label">Bonus multiplier</span><span id="multiplierText" class="mono text-sm font-medium text-mint">×1.00</span></div>
+          </section>
+          <section class="glass rounded-[20px] p-5">
+            <div class="mb-4 flex items-center justify-between"><div><div class="eyebrow">Global pulse</div><h2 class="mt-1 text-lg font-extrabold tracking-tight">Top runners</h2></div><span class="rounded-full bg-mint/10 px-2 py-1 text-[10px] font-bold text-mint">LIVE SIM</span></div>
+            <div id="leaderboard" class="space-y-0"></div>
+            <button id="leaderboardButton" class="mt-4 w-full rounded-xl border hairline bg-white/[.035] py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-white/[.08] hover:text-white">View full leaderboard ↗</button>
+          </section>
+          <section class="rounded-[20px] border border-aqua/15 bg-aqua/[.045] p-5"><div class="flex gap-3"><div class="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-aqua/10 text-aqua">♥</div><div><div class="text-sm font-bold text-slate-100">Heart note</div><p class="mt-1 text-xs leading-5 text-slate-400">Regular movement helps your heart work more efficiently. Every healthy pickup is a tiny vote for future-you.</p></div></div></section>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <div id="overlay" class="modal-backdrop fixed inset-0 z-20 flex items-center justify-center overflow-y-auto p-4 sm:p-8">
+    <section id="menuPanel" class="modal-panel glass w-full max-w-[1040px] rounded-[28px] p-5 sm:p-8">
+      <div class="modal-grid grid grid-cols-[1.1fr_.9fr] gap-6 lg:gap-10">
+        <div class="flex flex-col justify-center">
+          <div class="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-mint/25 bg-mint/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.18em] text-mint"><span class="pulse-dot h-1.5 w-1.5 rounded-full bg-mint"></span> Session ready</div>
+          <h1 class="max-w-xl text-4xl font-extrabold leading-[1.03] tracking-[-.05em] text-white sm:text-6xl">Make your<br><span class="text-mint">next choice</span> count.</h1>
+          <p class="mt-5 max-w-md text-sm leading-6 text-slate-400 sm:text-base">Dodge the junk. Chase the greens. Build a stronger, sharper version of yourself under one bright sky.</p>
+          <div class="mt-7 flex flex-wrap items-center gap-3"><button id="startButton" class="button-pop rounded-2xl bg-mint px-6 py-3.5 text-sm font-extrabold text-[#092112] shadow-[0_14px_35px_rgba(168,255,115,.2)] hover:bg-[#bbff91]">Start a run <span class="ml-2">→</span></button><span class="text-xs text-slate-500">Best score <span id="menuBest" class="mono text-slate-300">000000</span></span></div>
+          <div class="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span>✦ Healthy = muscle</span><span>◌ Junk = fat</span><span>☀ Permanent daylight</span></div>
+        </div>
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-white/10 bg-[#071523]/35 p-4 sm:p-5"><div class="mb-3 flex items-center justify-between"><div><div class="eyebrow">Simulated online</div><div class="mt-1 text-base font-bold">Leaderboard</div></div><span class="text-xl">🏁</span></div><div id="menuLeaderboard"></div></div>
+          <div class="rounded-2xl border border-white/10 bg-[#071523]/35 p-4 sm:p-5"><div class="mb-3 flex items-center justify-between"><div><div class="eyebrow">3 ways to win</div><div class="mt-1 text-base font-bold">Today’s checklist</div></div><span class="text-xl">✅</span></div><div id="menuChallenges" class="space-y-2"></div></div>
+        </div>
+      </div>
+    </section>
+    <section id="gameOverPanel" class="modal-panel hidden w-full max-w-[1080px] rounded-[28px] glass p-5 sm:p-8">
+      <div class="flex flex-wrap items-start justify-between gap-5 border-b hairline pb-6"><div><div class="eyebrow text-coral">Run complete</div><h2 class="mt-2 text-3xl font-extrabold tracking-tight sm:text-5xl">Your heart has<br><span class="text-mint">more miles</span> in it.</h2><p id="impactSummary" class="mt-3 max-w-lg text-sm leading-6 text-slate-400"></p></div><div class="text-left sm:text-right"><div class="label">Final score</div><div id="finalScore" class="score-glow mono mt-1 text-4xl font-medium text-mint sm:text-5xl">000000</div><div id="newBest" class="mt-2 hidden text-xs font-bold text-aqua">✦ New personal best</div></div></div>
+      <div class="mt-6 grid gap-5 md:grid-cols-[1fr_1.25fr_1fr]">
+        <div class="rounded-2xl border border-white/10 bg-[#071523]/35 p-4"><div class="label">Food balance</div><div class="mt-4 flex items-end gap-4"><div class="text-3xl">🥦</div><div class="flex-1"><div class="mb-1 flex justify-between text-xs"><span class="text-slate-400">Healthy</span><span id="healthyRatio" class="mono text-mint">0%</span></div><div class="progress-track"><div id="healthyBar" class="progress-fill" style="width:0%"></div></div></div></div><div class="mt-4 flex items-end gap-4"><div class="text-3xl">🍔</div><div class="flex-1"><div class="mb-1 flex justify-between text-xs"><span class="text-slate-400">Junk</span><span id="junkRatio" class="mono text-coral">0%</span></div><div class="progress-track"><div id="junkBar" class="h-full rounded-full bg-coral" style="width:0%;box-shadow:0 0 18px rgba(255,141,108,.35)"></div></div></div></div><div id="foodCounts" class="mt-4 border-t hairline pt-3 text-xs text-slate-500"></div></div>
+        <div class="rounded-2xl border border-aqua/15 bg-aqua/[.04] p-4"><div class="flex items-center gap-2"><div class="grid h-7 w-7 place-items-center rounded-lg bg-aqua/10 text-aqua">♥</div><div class="label text-aqua">Cardio reset</div></div><h3 class="mt-3 text-base font-bold">Small actions, real impact</h3><ul class="mt-3 space-y-3 text-xs leading-5 text-slate-400"><li class="flex gap-2"><span class="text-mint">01</span><span>Aim for <strong class="font-semibold text-slate-200">150 minutes</strong> of moderate movement each week.</span></li><li class="flex gap-2"><span class="text-mint">02</span><span>Fill half your plate with colorful <strong class="font-semibold text-slate-200">fruit and vegetables</strong>.</span></li><li class="flex gap-2"><span class="text-mint">03</span><span>Take a brisk <strong class="font-semibold text-slate-200">10-minute walk</strong> after a meal when you can.</span></li></ul></div>
+        <div class="rounded-2xl border border-white/10 bg-[#071523]/35 p-4"><div class="mb-3 flex items-center justify-between"><div><div class="eyebrow">Your position</div><div class="mt-1 text-base font-bold">Leaderboard</div></div><span class="text-xl">🏆</span></div><div id="overLeaderboard"></div></div>
+      </div>
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-3"><p id="challengeReward" class="text-xs text-slate-500"></p><div class="flex gap-2"><button id="menuButton" class="button-pop rounded-xl border hairline bg-white/[.04] px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/[.08]">Main menu</button><button id="retryButton" class="button-pop rounded-xl bg-mint px-5 py-3 text-xs font-extrabold text-[#092112] hover:bg-[#bbff91]">Run it back →</button></div></div>
+    </section>
+  </div>
+
+  <div id="helpModal" class="modal-backdrop fixed inset-0 z-30 hidden items-center justify-center p-4"><section class="glass max-w-md rounded-[24px] p-6"><div class="flex items-start justify-between gap-4"><div><div class="eyebrow">Quick guide</div><h2 class="mt-1 text-2xl font-extrabold">Play for your future self</h2></div><button id="closeHelp" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10">×</button></div><div class="mt-5 space-y-3 text-sm leading-6 text-slate-400"><p><span class="text-aqua">Move sideways</span> with <span class="mono text-slate-200">A / D</span> or <span class="mono text-slate-200">← / →</span>. On touch screens, drag your runner.</p><p><span class="text-mint">Jump</span> with <span class="mono text-slate-200">W</span>, <span class="mono text-slate-200">↑</span>, <span class="mono text-slate-200">Space</span>, or the Jump button. Use it to dodge food or reach a different lane.</p><p><span class="text-mint">Healthy foods</span> build lasting muscle, confidence, and a blue aura. <span class="text-coral">Junk food</span> adds lasting body fat and saps your meter.</p><p>The sky stays bright for the whole run. Keep your choices smart and your streak alive.</p></div><button id="closeHelpBottom" class="button-pop mt-6 w-full rounded-xl bg-aqua/15 py-3 text-xs font-bold text-aqua hover:bg-aqua/25">Got it</button></section></div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const context = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const menuPanel = document.getElementById('menuPanel');
+    const gameOverPanel = document.getElementById('gameOverPanel');
+    const challengeList = document.getElementById('challengeList');
+    const menuChallenges = document.getElementById('menuChallenges');
+    const leaderboard = document.getElementById('leaderboard');
+    const menuLeaderboard = document.getElementById('menuLeaderboard');
+    const overLeaderboard = document.getElementById('overLeaderboard');
+    const pauseBadge = document.getElementById('pauseBadge');
+    const pauseButton = document.getElementById('pauseButton');
+    const soundButton = document.getElementById('soundButton');
+    const helpModal = document.getElementById('helpModal');
+    const dateKey = new Date().toISOString().slice(0, 10);
+    const challengeStorageKey = 'fitshift-daily-' + dateKey;
+    const highScoreStorageKey = 'fitshift-high-score';
+    const dummyPlayers = [
+      { name: 'BroccoliBoss', score: 10840, color: '#a8ff73' },
+      { name: 'CardioCat', score: 8720, color: '#65e8ff' },
+      { name: 'FitRunner99', score: 6940, color: '#ffcf62' },
+      { name: 'ZenZucchini', score: 5260, color: '#c6a8ff' },
+      { name: 'PulsePilot', score: 4010, color: '#ff8d6c' }
+    ];
+    const challengeDefinitions = [
+      { id: 'greens', name: 'Greens streak', detail: 'Collect 5 leafy greens in one run', reward: 0.05 },
+      { id: 'day', name: 'Daylight streak', detail: 'Survive 30 seconds above 0% fitness', reward: 0.05 },
+      { id: 'balanced', name: 'Balanced diet', detail: 'Finish with 15 healthy picks', reward: 0.05 }
+    ];
+    const foodTypes = {
+      broccoli: { emoji: '🥦', healthy: true, points: 120, label: 'broccoli' },
+      greens: { emoji: '🥬', healthy: true, points: 145, label: 'spinach patch' },
+      apple: { emoji: '🍎', healthy: true, points: 100, label: 'apple' },
+      pizza: { emoji: '🍕', healthy: false, points: 30, label: 'pizza' },
+      burger: { emoji: '🍔', healthy: false, points: 35, label: 'burger' },
+      fries: { emoji: '🍟', healthy: false, points: 25, label: 'fries' }
+    };
+    const state = {
+      mode: 'menu', elapsed: 0, score: 0, fitness: 100, healthy: 0, junk: 0, greens: 0, greensStreak: 0,
+      playerX: 180, playerTargetX: 180, playerY: 355, jumpHeight: 0, jumpVelocity: 0, playerScaleX: 1, playerScaleY: 1, playerScaleXTarget: 1, playerScaleYTarget: 1, physiqueScore: 0, physiqueFlash: 0, physiqueFlashText: '', healthyStreak: 0, junkStreak: 0, aura: 0, combo: 0,
+      items: [], particles: [], stars: [], spawnTimer: 0, lastTime: 0, paused: false, sound: true, highScore: Number(localStorage.getItem(highScoreStorageKey) || 0),
+      challenges: loadChallenges(), runChallengeCompletion: { greens: false, day: false, balanced: false }
+    };
+
+    function loadChallenges() {
+      const saved = localStorage.getItem(challengeStorageKey);
+      const parsed = saved ? JSON.parse(saved) : {};
+      return { greens: Boolean(parsed.greens), day: Boolean(parsed.day), balanced: Boolean(parsed.balanced) };
+    }
+
+    function saveChallenges() { localStorage.setItem(challengeStorageKey, JSON.stringify(state.challenges)); }
+    function padScore(value) { return String(Math.max(0, Math.floor(value))).padStart(6, '0'); }
+    function formatTime(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`; }
+    function getPhase() { return 'day'; }
+    function getMultiplier() { return 1 + Object.values(state.challenges).filter(Boolean).length * 0.05; }
+
+    function sortedLeaderboard() {
+      const player = { name: 'YOU', score: Math.max(state.highScore, state.score), color: '#65e8ff', you: true };
+      return [...dummyPlayers, player].sort((first, second) => second.score - first.score);
+    }
+
+    function renderLeaderboard(target, compact = false) {
+      const rows = sortedLeaderboard();
+      const visibleRows = compact ? rows.slice(0, 4) : rows.slice(0, 6);
+      target.innerHTML = visibleRows.map((entry, index) => `<div class="leader-row ${entry.you ? 'you' : ''} flex items-center gap-3 px-2 py-2.5"><span class="mono w-4 text-[10px] ${index < 3 ? 'text-mint' : 'text-slate-600'}">${String(index + 1).padStart(2, '0')}</span><span class="grid h-7 w-7 place-items-center rounded-lg text-xs" style="background:${entry.color}18;color:${entry.color}">${entry.you ? '✦' : entry.name.slice(0, 1)}</span><span class="min-w-0 flex-1 truncate text-xs font-semibold ${entry.you ? 'text-aqua' : 'text-slate-300'}">${entry.name}${entry.you ? ' <span class="text-[9px] text-aqua">(you)</span>' : ''}</span><span class="mono text-xs ${entry.you ? 'text-aqua' : 'text-slate-400'}">${padScore(entry.score)}</span></div>`).join('');
+    }
+
+    function challengeProgress(id) {
+      if (id === 'greens') return state.runChallengeCompletion.greens ? 'complete' : `${Math.min(state.greensStreak, 5)}/5`
+      if (id === 'day') return state.runChallengeCompletion.day ? 'complete' : state.elapsed >= 30 && state.fitness > 0 ? 'reached' : 'locked';
+      return state.runChallengeCompletion.balanced ? 'complete' : `${Math.min(state.healthy, 15)}/15`;
+    }
+
+    function renderChallenges() {
+      const markup = challengeDefinitions.map((challenge) => { const done = state.challenges[challenge.id] || state.runChallengeCompletion[challenge.id]; return `<div class="challenge-row ${done ? 'done' : ''} flex items-center gap-3 rounded-xl px-2 py-2"><div class="challenge-icon">${done ? '✓' : '○'}</div><div class="min-w-0 flex-1"><div class="challenge-name text-xs font-semibold text-slate-300">${challenge.name}</div><div class="truncate text-[10px] text-slate-500">${challenge.detail}</div></div><div class="mono text-[10px] ${done ? 'text-mint' : 'text-slate-500'}">${done ? 'DONE' : challengeProgress(challenge.id)}</div></div>`; }).join('');
+      challengeList.innerHTML = markup;
+      menuChallenges.innerHTML = markup;
+      document.getElementById('multiplierText').textContent = `×${getMultiplier().toFixed(2)}`;
+    }
+
+    function updateLeaderboards() { renderLeaderboard(leaderboard, true); renderLeaderboard(menuLeaderboard); renderLeaderboard(overLeaderboard, true); }
+
+    function startRun() {
+      state.mode = 'playing'; state.elapsed = 0; state.score = 0; state.fitness = 100; state.healthy = 0; state.junk = 0; state.greens = 0; state.greensStreak = 0; state.playerX = 180; state.playerTargetX = 180; state.playerY = 355; state.jumpHeight = 0; state.jumpVelocity = 0; state.playerScaleX = 1; state.playerScaleY = 1; state.playerScaleXTarget = 1; state.playerScaleYTarget = 1; state.physiqueScore = 0; state.physiqueFlash = 0; state.physiqueFlashText = ''; state.healthyStreak = 0; state.junkStreak = 0; state.aura = 0; state.combo = 0; state.items = []; state.particles = []; state.spawnTimer = .2; state.paused = false; state.runChallengeCompletion = { greens: false, day: false, balanced: false }; overlay.classList.add('hidden'); menuPanel.classList.add('hidden'); gameOverPanel.classList.add('hidden'); pauseBadge.classList.add('hidden'); pauseButton.textContent = 'Pause'; document.getElementById('statusText').textContent = 'Keep moving · make it count'; renderChallenges(); requestAnimationFrame(gameLoop);
+    }
+
+    function finishRun() {
+      if (state.mode !== 'playing') return;
+      state.mode = 'over';
+      if (state.greensStreak >= 5) state.runChallengeCompletion.greens = true;
+      if (state.healthy >= 15) state.runChallengeCompletion.balanced = true;
+      Object.keys(state.runChallengeCompletion).forEach((id) => { if (state.runChallengeCompletion[id]) state.challenges[id] = true; });
+      saveChallenges();
+      const previousHigh = state.highScore;
+      if (state.score > state.highScore) { state.highScore = state.score; localStorage.setItem(highScoreStorageKey, String(state.highScore)); }
+      const totalFoods = state.healthy + state.junk; const healthyRatio = totalFoods ? Math.round(state.healthy / totalFoods * 100) : 0; const junkRatio = totalFoods ? 100 - healthyRatio : 0;
+      document.getElementById('finalScore').textContent = padScore(state.score); document.getElementById('newBest').classList.toggle('hidden', state.score <= previousHigh); document.getElementById('impactSummary').textContent = totalFoods ? `You made ${state.healthy} heart-smart choices and ${state.junk} quick-energy choices across ${formatTime(state.elapsed)}. Your best next move is simply to keep the streak alive.` : 'The run ended before your first pickup. Try a gentle side-to-side rhythm and look for the green glow.';
+      document.getElementById('healthyRatio').textContent = `${healthyRatio}%`; document.getElementById('junkRatio').textContent = `${junkRatio}%`; document.getElementById('healthyBar').style.width = `${healthyRatio}%`; document.getElementById('junkBar').style.width = `${junkRatio}%`; document.getElementById('foodCounts').textContent = `${state.healthy} healthy pickups · ${state.junk} junk pickups · ${formatTime(state.elapsed)} survived`;
+      const completedCount = Object.values(state.challenges).filter(Boolean).length; document.getElementById('challengeReward').textContent = completedCount ? `✦ ${completedCount}/3 daily boosts active · score multiplier ×${getMultiplier().toFixed(2)}` : 'Complete daily boosts to increase every future score.';
+      overlay.classList.remove('hidden'); menuPanel.classList.add('hidden'); gameOverPanel.classList.remove('hidden'); updateLeaderboards(); renderChallenges();
+    }
+
+    function setMenu() { state.mode = 'menu'; overlay.classList.remove('hidden'); menuPanel.classList.remove('hidden'); gameOverPanel.classList.add('hidden'); document.getElementById('menuBest').textContent = padScore(state.highScore); document.getElementById('topBest').textContent = padScore(state.highScore); updateLeaderboards(); renderChallenges(); }
+    function togglePause() { if (state.mode !== 'playing') return; state.paused = !state.paused; pauseBadge.classList.toggle('hidden', !state.paused); pauseButton.textContent = state.paused ? 'Resume' : 'Pause'; }
+    function jump() { if (state.mode !== 'playing' || state.paused || state.jumpHeight > 0) return; state.jumpVelocity = 620; state.jumpHeight = .01; }
+
+    function addParticle(x, y, healthy) {
+      const symbols = healthy ? ['✦', '♥', '✧', '✳'] : ['•', '◌', '×', '·'];
+      for (let index = 0; index < 14; index += 1) state.particles.push({ x, y, vx: (Math.random() - .5) * 150, vy: (Math.random() - .75) * 170, life: .6 + Math.random() * .5, age: 0, symbol: symbols[index % symbols.length], healthy });
+    }
+
+    function spawnFood() {
+      const healthy = Math.random() > .39; const healthyTypes = ['broccoli', 'greens', 'apple']; const junkTypes = ['pizza', 'burger', 'fries']; const type = healthy ? healthyTypes[Math.floor(Math.random() * healthyTypes.length)] : junkTypes[Math.floor(Math.random() * junkTypes.length)]; const requiresJump = Math.random() > .58; const laneY = requiresJump ? 284 + Math.random() * 10 : 365 + Math.random() * 12;
+      state.items.push({ x: canvas.width + 50, y: laneY, type, requiresJump, rotation: (Math.random() - .5) * .4, phase: Math.random() * 6.28, drift: Math.random() * 3 });
+    }
+
+    function eatFood(item, index) {
+      const food = foodTypes[item.type]; state.items.splice(index, 1); addParticle(item.x, item.y, food.healthy);
+      if (food.healthy) { state.healthy += 1; state.combo += 1; state.healthyStreak += 1; state.junkStreak = 0; state.fitness = Math.min(100, state.fitness + 3.6); state.physiqueScore = Math.min(10, state.physiqueScore + 1); state.physiqueFlash = 1; state.physiqueFlashText = state.healthyStreak > 1 ? `MUSCLE ×${state.healthyStreak}` : 'STRONG +1'; state.aura = 1; if (item.type === 'greens') { state.greens += 1; state.greensStreak += 1; } else { state.greensStreak = 0; } if (state.greensStreak >= 5) state.runChallengeCompletion.greens = true; }
+      else { state.junk += 1; state.combo = 0; state.junkStreak += 1; state.healthyStreak = 0; state.fitness = Math.max(0, state.fitness - 13); state.physiqueScore = Math.max(-10, state.physiqueScore - 1); state.physiqueFlash = 1; state.physiqueFlashText = state.junkStreak > 1 ? `SWEAT ×${state.junkStreak}` : 'FAT +1'; state.aura = 0; state.greensStreak = 0; }
+      state.score += Math.round((food.points + Math.min(state.combo, 8) * 10) * getMultiplier());
+      if (state.fitness <= 0) finishRun();
+    }
+
+    function updateChallenges() { if (state.elapsed >= 30 && state.fitness > 0) state.runChallengeCompletion.day = true; renderChallenges(); }
+
+    function updateGame(delta) {
+      if (state.paused) return;
+      state.elapsed += delta; const phase = getPhase(); const speed = 220; const wind = 0;
+      state.playerX += (state.playerTargetX - state.playerX) * Math.min(1, delta * 12); state.jumpHeight += state.jumpVelocity * delta; state.jumpVelocity -= 1500 * delta; if (state.jumpHeight <= 0) { state.jumpHeight = 0; state.jumpVelocity = 0; } state.playerY = 355 - state.jumpHeight + Math.sin(state.elapsed * 4) * 4; state.physiqueFlash = Math.max(0, state.physiqueFlash - delta * 1.8); const streakMuscle = Math.min(6, Math.max(0, state.healthyStreak - 1)); const strength = Math.max(0, state.physiqueScore) + streakMuscle; const fatness = Math.max(0, -state.physiqueScore); state.playerScaleXTarget = 1 + strength * .012 + fatness * .045; state.playerScaleYTarget = 1 + strength * .028 - fatness * .018; state.playerScaleX += (state.playerScaleXTarget - state.playerScaleX) * Math.min(1, delta * 4); state.playerScaleY += (state.playerScaleYTarget - state.playerScaleY) * Math.min(1, delta * 4); state.aura = Math.max(0, state.aura - delta * .65);
+      state.spawnTimer -= delta; if (state.spawnTimer <= 0) { spawnFood(); state.spawnTimer = Math.max(.45, 1.05 - state.elapsed * .005) + Math.random() * .36; }
+      state.items.forEach((item, index) => { item.x -= speed * delta; item.phase += delta * item.drift; const verticalReach = item.requiresJump ? 42 : 50; if (Math.abs(item.x - state.playerX) < 56 && Math.abs(item.y - state.playerY) < verticalReach) eatFood(item, index); });
+      state.items = state.items.filter((item) => item.x > -70 && item.y > 225 && item.y < 475);
+      state.particles.forEach((particle) => { particle.age += delta; particle.x += particle.vx * delta; particle.y += particle.vy * delta; particle.vy += 100 * delta; }); state.particles = state.particles.filter((particle) => particle.age < particle.life);
+      document.getElementById('timeText').textContent = formatTime(state.elapsed); document.getElementById('scoreText').textContent = padScore(state.score); document.getElementById('fitnessText').textContent = `${Math.round(state.fitness)}%`; document.getElementById('fitnessBar').style.width = `${state.fitness}%`; updatePhaseUi(phase); updateChallenges();
+    }
+
+    function updatePhaseUi(phase) {
+      const pill = document.getElementById('phasePill'); const orb = document.getElementById('cycleOrb'); const progress = state.elapsed % 90 / 90 * 360; pill.className = 'phase-pill day rounded-full px-3 py-1.5 text-[11px] font-bold tracking-wide'; pill.textContent = '☀ DAY RUN'; orb.className = 'cycle-orb day grid h-8 w-8 place-items-center rounded-full text-lg'; orb.style.transform = `rotate(${progress}deg)`; orb.textContent = '☀'; document.getElementById('phaseLabel').textContent = 'DAYLIGHT'; document.getElementById('phaseSub').textContent = 'SUNNY MODE'; document.getElementById('statusText').textContent = 'Bright skies · baseline speed';
+    }
+
+    function drawBackground() {
+      const gradient = context.createLinearGradient(0, 0, 0, canvas.height); gradient.addColorStop(0, '#168eb2'); gradient.addColorStop(.54, '#76d7cc'); gradient.addColorStop(1, '#ffe09a'); context.fillStyle = gradient; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.globalAlpha = .8; context.fillStyle = '#fff1b0'; context.beginPath(); context.arc(760, 92, 30, 0, Math.PI * 2); context.fill(); context.globalAlpha = 1;
+      context.fillStyle = 'rgba(4,23,35,.35)'; context.beginPath(); context.moveTo(0, 412); for (let x = 0; x <= canvas.width; x += 38) context.lineTo(x, 360 + Math.sin(x * .017) * 16); context.lineTo(canvas.width, 520); context.lineTo(0, 520); context.fill(); context.fillStyle = 'rgba(3,17,28,.72)'; context.fillRect(0, 445, canvas.width, 75); for (let x = -20; x < canvas.width; x += 76) { context.fillStyle = 'rgba(101,232,255,.16)'; context.fillRect(x, 469 + (x % 3) * 5, 32, 2); } context.fillStyle = 'rgba(168,255,115,.45)'; context.fillRect(0, 443, canvas.width, 2);
+    }
+
+    function drawPlayer() {
+      const x = state.playerX; const y = state.playerY; context.save(); context.translate(x, y); if (state.aura > 0) { context.globalAlpha = state.aura * .3; const auraGradient = context.createRadialGradient(0, 0, 12, 0, 0, 72); auraGradient.addColorStop(0, '#65e8ff'); auraGradient.addColorStop(1, 'transparent'); context.fillStyle = auraGradient; context.beginPath(); context.arc(0, 0, 72, 0, Math.PI * 2); context.fill(); context.globalAlpha = 1; context.strokeStyle = 'rgba(101,232,255,.55)'; context.lineWidth = 2; context.setLineDash([5, 8]); context.rotate(state.elapsed * 1.2); context.beginPath(); context.arc(0, 0, 47, 0, Math.PI * 2); context.stroke(); context.setLineDash([]); context.rotate(-state.elapsed * 1.2); }
+      const streakMuscle = Math.min(6, Math.max(0, state.healthyStreak - 1)); const strength = Math.max(0, state.physiqueScore) + streakMuscle; const fatness = Math.max(0, -state.physiqueScore); const exhausted = state.junkStreak > 1; const breathPulse = exhausted ? Math.max(0, Math.sin(state.elapsed * 8)) * .06 : 0; const bodyWidth = 23 + fatness * 2.8 + strength * 1.15; const bodyHeight = 42 + strength * 2.5 - fatness * 1.4; const bob = Math.sin(state.elapsed * 11) * 3; context.translate(0, bob); context.scale(state.playerScaleX + breathPulse, state.playerScaleY - breathPulse * .4); context.fillStyle = 'rgba(3,13,23,.42)'; context.beginPath(); context.ellipse(0, 35, 35 + fatness * 2, 9, 0, 0, Math.PI * 2); context.fill(); context.fillStyle = '#ecfaff'; context.strokeStyle = '#122f40'; context.lineWidth = 3; context.beginPath(); context.roundRect(-bodyWidth, -6, bodyWidth * 2, bodyHeight, 17 + fatness); context.fill(); context.stroke(); if (fatness > 0) { context.fillStyle = 'rgba(255,141,108,.3)'; context.beginPath(); context.ellipse(0, 16, 14 + fatness * 2.2, 11 + fatness * 1.1, 0, 0, Math.PI * 2); context.fill(); } if (strength > 0) { context.fillStyle = 'rgba(101,232,255,.38)'; context.beginPath(); context.ellipse(-bodyWidth + 5, 5, 9 + strength * .45, 12 + strength * .4, -.25, 0, Math.PI * 2); context.ellipse(bodyWidth - 5, 5, 9 + strength * .45, 12 + strength * .4, .25, 0, Math.PI * 2); context.ellipse(-11, 11, 8 + strength * .45, 10 + strength * .35, 0, 0, Math.PI * 2); context.ellipse(11, 11, 8 + strength * .45, 10 + strength * .35, 0, 0, Math.PI * 2); context.fill(); } context.fillStyle = '#122c48'; context.beginPath(); context.moveTo(-6, -5); context.lineTo(0, 8); context.lineTo(6, -5); context.closePath(); context.fill(); context.fillStyle = '#a8ff73'; context.beginPath(); context.moveTo(0, 3); context.lineTo(-4, 13); context.lineTo(4, 13); context.closePath(); context.fill(); context.fillStyle = '#f4c3a4'; context.beginPath(); context.arc(0, -28, 20, 0, Math.PI * 2); context.fill(); context.fillStyle = '#3a243a'; context.beginPath(); context.moveTo(-19, -30); context.quadraticCurveTo(-15, -52, -1, -47); context.quadraticCurveTo(10, -55, 20, -36); context.lineTo(14, -31); context.quadraticCurveTo(5, -40, -1, -35); context.quadraticCurveTo(-10, -41, -19, -30); context.fill(); context.strokeStyle = '#14283a'; context.lineWidth = 2; context.strokeRect(-15, -34, 12, 8); context.strokeRect(3, -34, 12, 8); context.beginPath(); context.moveTo(-3, -30); context.lineTo(3, -30); context.stroke(); context.fillStyle = '#132c3b'; context.beginPath(); context.arc(-9, -30, 2, 0, Math.PI * 2); context.arc(9, -30, 2, 0, Math.PI * 2); context.fill(); if (exhausted) { context.fillStyle = '#412637'; context.beginPath(); context.ellipse(0, -23, 5, 7 + Math.max(0, Math.sin(state.elapsed * 8)) * 2, 0, 0, Math.PI * 2); context.fill(); context.fillStyle = 'rgba(101,232,255,.72)'; context.beginPath(); context.ellipse(-14, -39, 3, 6, -.45, 0, Math.PI * 2); context.ellipse(15, -37, 3, 6, .45, 0, Math.PI * 2); context.fill(); context.globalAlpha = .34 + Math.max(0, Math.sin(state.elapsed * 8)) * .2; context.beginPath(); context.arc(10, -18, 5, 0, Math.PI * 2); context.arc(21, -16, 3, 0, Math.PI * 2); context.fill(); context.globalAlpha = 1; } else { context.strokeStyle = '#7d3e41'; context.lineWidth = 2; context.beginPath(); context.arc(0, -23, 7, .15, Math.PI - .15); context.stroke(); } context.strokeStyle = '#ecfaff'; context.lineWidth = 7 + strength * .35 + fatness * .25; context.lineCap = 'round'; context.beginPath(); context.moveTo(-bodyWidth + 2, 7); context.lineTo(-bodyWidth - 10, 25 + Math.sin(state.elapsed * 12) * 3); context.moveTo(bodyWidth - 2, 7); context.lineTo(bodyWidth + 10, 22 - Math.sin(state.elapsed * 12) * 3); context.moveTo(-10, bodyHeight - 4); context.lineTo(-16, bodyHeight + 16 + Math.sin(state.elapsed * 12) * 4); context.moveTo(10, bodyHeight - 4); context.lineTo(17, bodyHeight + 16 - Math.sin(state.elapsed * 12) * 4); context.stroke(); if (exhausted) { context.fillStyle = '#ff8d6c'; context.font = '700 10px DM Mono, monospace'; context.textAlign = 'center'; context.fillText('HEAVY BREATH', 0, -69); } if (state.physiqueFlash > 0) { context.globalAlpha = state.physiqueFlash; context.fillStyle = state.physiqueScore >= 0 ? '#a8ff73' : '#ff8d6c'; context.font = '700 13px DM Mono, monospace'; context.textAlign = 'center'; context.fillText(state.physiqueFlashText, 0, exhausted ? -84 : -67); context.globalAlpha = 1; } context.restore();
+    }
+
+    function drawFood(item) { const food = foodTypes[item.type]; context.save(); context.translate(item.x, item.y); context.rotate(Math.sin(state.elapsed * 2 + item.phase) * .12 + item.rotation); context.globalAlpha = .22; context.fillStyle = food.healthy ? '#a8ff73' : '#ff8d6c'; context.beginPath(); context.arc(0, 0, 35, 0, Math.PI * 2); context.fill(); context.globalAlpha = 1; if (item.requiresJump) { context.strokeStyle = food.healthy ? 'rgba(168,255,115,.72)' : 'rgba(255,141,108,.72)'; context.lineWidth = 2; context.setLineDash([3, 4]); context.beginPath(); context.moveTo(0, 24); context.lineTo(0, 38); context.stroke(); context.setLineDash([]); context.font = '10px DM Mono, monospace'; context.textAlign = 'center'; context.fillStyle = food.healthy ? '#dfffcf' : '#ffc3b4'; context.fillText('JUMP', 0, 51); } context.font = '38px Apple Color Emoji, Segoe UI Emoji, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(food.emoji, 0, 0); context.restore(); }
+    function drawParticles() { state.particles.forEach((particle) => { const lifeProgress = 1 - particle.age / particle.life; context.save(); context.globalAlpha = lifeProgress; context.fillStyle = particle.healthy ? '#a8ff73' : '#9d9d95'; context.font = `${14 + lifeProgress * 10}px sans-serif`; context.textAlign = 'center'; context.fillText(particle.symbol, particle.x, particle.y); context.restore(); }); }
+    function drawCanvas() { context.clearRect(0, 0, canvas.width, canvas.height); drawBackground(); state.items.forEach(drawFood); drawPlayer(); drawParticles(); }
+
+    function gameLoop(timestamp) { if (state.mode !== 'playing') { drawCanvas(); return; } const delta = Math.min(.033, (timestamp - state.lastTime) / 1000 || 0); state.lastTime = timestamp; updateGame(delta); drawCanvas(); requestAnimationFrame(gameLoop); }
+
+    function setTargetFromPointer(event) { const rect = canvas.getBoundingClientRect(); const clientX = event.touches ? event.touches[0].clientX : event.clientX; state.playerTargetX = Math.max(65, Math.min(canvas.width - 65, (clientX - rect.left) / rect.width * canvas.width)); }
+    let dragging = false;
+    canvas.addEventListener('pointerdown', (event) => { if (state.mode === 'playing') { dragging = true; canvas.setPointerCapture(event.pointerId); setTargetFromPointer(event); } });
+    canvas.addEventListener('pointermove', (event) => { if (dragging) setTargetFromPointer(event); });
+    canvas.addEventListener('pointerup', () => { dragging = false; });
+    canvas.addEventListener('pointercancel', () => { dragging = false; });
+    document.addEventListener('keydown', (event) => { const key = event.key.toLowerCase(); if (['arrowleft', 'arrowright', 'arrowup', 'a', 'd', 'w', 'p', ' '].includes(key)) event.preventDefault(); if (state.mode !== 'playing') return; if (key === 'arrowleft' || key === 'a') state.playerTargetX -= 76; if (key === 'arrowright' || key === 'd') state.playerTargetX += 76; state.playerTargetX = Math.max(65, Math.min(canvas.width - 65, state.playerTargetX)); if (key === 'arrowup' || key === 'w') jump(); if (key === 'p') togglePause(); if (key === ' ') { if (state.paused) togglePause(); else jump(); } });
+    document.getElementById('startButton').addEventListener('click', startRun); document.getElementById('retryButton').addEventListener('click', startRun); document.getElementById('menuButton').addEventListener('click', setMenu); document.getElementById('jumpButton').addEventListener('click', jump); pauseButton.addEventListener('click', togglePause);
+    soundButton.addEventListener('click', () => { state.sound = !state.sound; soundButton.textContent = state.sound ? 'Sound on' : 'Sound off'; });
+    document.getElementById('helpButton').addEventListener('click', () => { helpModal.classList.remove('hidden'); helpModal.classList.add('flex'); });
+    function closeHelp() { helpModal.classList.add('hidden'); helpModal.classList.remove('flex'); }
+    document.getElementById('closeHelp').addEventListener('click', closeHelp); document.getElementById('closeHelpBottom').addEventListener('click', closeHelp); helpModal.addEventListener('click', (event) => { if (event.target === helpModal) closeHelp(); });
+    setMenu(); updatePhaseUi('day'); drawCanvas();
+  </script>
+</body>
+</html>
